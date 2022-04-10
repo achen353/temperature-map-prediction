@@ -1,0 +1,26 @@
+# Python
+*.py[cod]
+*.so
+*.egg
+*.egg-info
+dist
+build
+
+# Other
+*.pth
+*.pickle
+*.ipynb
+.DS_Store
+
+# PyCharm
+.idea
+
+# Frontend
+node_modules
+
+# Debug/Logs:
+*.log
+debug
+
+# Cache
+cache
