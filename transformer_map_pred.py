@@ -1,12 +1,19 @@
 import torch
 import torch.nn as nn
-import numpy as np
-import time
-import math
 
 
 class Transformer(nn.Module):
-    def __init__(self, num_enc_layers, input_size, input_len, pred_len, feature_size, NHEAD, has_pos=False, dropout=0.1):
+    def __init__(
+        self,
+        num_enc_layers,
+        input_size,
+        input_len,
+        pred_len,
+        feature_size,
+        NHEAD,
+        has_pos=False,
+        dropout=0.1,
+    ):
         super(Transformer, self).__init__()
         # num_enc_layers (hyperparameter): number of the encoder layers
         # input_size: number of pixel per map
@@ -18,10 +25,16 @@ class Transformer(nn.Module):
         # dropout: dropout of the transformer encoder
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.has_pos = has_pos
-        self.project_linear = nn.Linear(input_size, feature_size) # project input to the feature_size
+        self.project_linear = nn.Linear(
+            input_size, feature_size
+        )  # project input to the feature_size
 
-        self.encoder_layer = nn.TransformerEncoderLayer(d_model=feature_size, nhead=NHEAD, dropout=dropout)
-        self.transformer_enc = nn.TransformerEncoder(self.encoder_layer3, num_layers=num_enc_layers)
+        self.encoder_layer = nn.TransformerEncoderLayer(
+            d_model=feature_size, nhead=NHEAD, dropout=dropout
+        )
+        self.transformer_enc = nn.TransformerEncoder(
+            self.encoder_layer3, num_layers=num_enc_layers
+        )
 
         if self.has_pos:
             self.pos_layer = nn.Linear(input_size, input_size)
@@ -59,19 +72,23 @@ class Transformer(nn.Module):
 
         seq_len, batch_size, input_size = input.shape
 
-        tokens = torch.zeros(self.pred_len, batch_size, input_size) # this is for the output seq
+        tokens = torch.zeros(
+            self.pred_len, batch_size, input_size
+        )  # this is for the output seq
 
-        output = torch.cat((input, tokens.to(self.device)), 0) # cat two tensors
+        output = torch.cat((input, tokens.to(self.device)), 0)  # cat two tensors
 
         if self.has_pos:
-            pos_enc = self.pos_layer(output) # using linear transform as the position embedding
-            output = torch.add(pos_enc, output) #add position info and input
+            pos_enc = self.pos_layer(
+                output
+            )  # using linear transform as the position embedding
+            output = torch.add(pos_enc, output)  # add position info and input
 
         output = self.project_linear(output)
 
         output = self.transformer_enc(output)
 
-        output = output[input_size:, :, :] # only use the sequence of tokens to predict
+        output = output[input_size:, :, :]  # only use the sequence of tokens to predict
 
         output = self.linear1(output)
         output = self.l_relu1()
@@ -91,7 +108,7 @@ class Transformer(nn.Module):
 # criterion = nn.MSELoss()
 # optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 # scheduler = StepLR(optimizer, step_size=100, gamma=0.99)
-#loader = Data.DataLoader(dataset=torch_dataset, batch_size= BATCH_SIZE, shuffle=True)
+# loader = Data.DataLoader(dataset=torch_dataset, batch_size= BATCH_SIZE, shuffle=True)
 # model.train()
 
 # for epoch in range(EPOCH):
