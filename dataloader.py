@@ -385,6 +385,8 @@ class MODISDataLoader(data.Dataset):
         """
         inp_seq = None
         pred_seq = None
+        starting_point_x = None
+        starting_point_y = None
 
         if self.mode == "train":
             inp_seq, pred_seq = self.training_data[index]
@@ -393,34 +395,31 @@ class MODISDataLoader(data.Dataset):
         elif self.mode == "test":
             inp_seq, pred_seq = self.test_data[index]
 
-        path = self.modis_image_path + "/" + inp_seq[0] + ".tif"
-        modis_img = cv2.imread(path, -1)
-        modis_img_length = np.array(modis_img).shape[0]
-        modis_img_breadth = np.array(modis_img).shape[1]
-        starting_point_x = random.randint(0, modis_img_length - (self.patch_dim + 1))
-        starting_point_y = random.randint(0, modis_img_breadth - (self.patch_dim + 1))
+        if self.mode == "train":
+            starting_point_x = self.training_data_seq_id[index][1]
+            starting_point_y = self.training_data_seq_id[index][2]
+        elif self.mode == "validation":
+            starting_point_x = self.validation_data_seq_id[index][1]
+            starting_point_y = self.validation_data_seq_id[index][2]
+        elif self.mode == "test":
+            starting_point_x = self.test_data_seq_id[index][1]
+            starting_point_y = self.test_data_seq_id[index][2]
+
 
         input_modis_seq = np.zeros((self.input_seq_len, self.patch_dim, self.patch_dim))
         for i, img_str in enumerate(inp_seq):
-            path = self.modis_image_path + "/" + img_str + ".tif"
+            path = self.modis_image_path+"/"+img_str+".tif"
             modis_img = cv2.imread(path, -1)
-            modis_img = modis_img[
-                starting_point_x : starting_point_x + self.patch_dim,
-                starting_point_y : starting_point_y + self.patch_dim,
-            ]
-            input_modis_seq[i, :, :] = modis_img
+            modis_img = modis_img[starting_point_x:starting_point_x+self.patch_dim, starting_point_y:starting_point_y+self.patch_dim]
+            input_modis_seq[i,:,:] = modis_img
 
-        pred_modis_seq = np.zeros(
-            (self.prediction_seq_len, self.patch_dim, self.patch_dim)
-        )
+
+        pred_modis_seq = np.zeros((self.prediction_seq_len, self.patch_dim, self.patch_dim))
         for i, img_str in enumerate(pred_seq):
-            path = self.modis_image_path + "/" + img_str + ".tif"
+            path = self.modis_image_path+"/"+img_str+".tif"
             modis_img = cv2.imread(path, -1)
-            modis_img = modis_img[
-                starting_point_x : starting_point_x + self.patch_dim,
-                starting_point_y : starting_point_y + self.patch_dim,
-            ]
-            pred_modis_seq[i, :, :] = modis_img
+            modis_img = modis_img[starting_point_x:starting_point_x+self.patch_dim, starting_point_y:starting_point_y+self.patch_dim]
+            pred_modis_seq[i,:,:] = modis_img
 
         return (input_modis_seq, pred_modis_seq)
 
