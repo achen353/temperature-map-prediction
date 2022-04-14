@@ -405,21 +405,27 @@ class MODISDataLoader(data.Dataset):
             starting_point_x = self.test_data_seq_id[index][1]
             starting_point_y = self.test_data_seq_id[index][2]
 
-
         input_modis_seq = np.zeros((self.input_seq_len, self.patch_dim, self.patch_dim))
         for i, img_str in enumerate(inp_seq):
-            path = self.modis_image_path+"/"+img_str+".tif"
+            path = self.modis_image_path + "/" + img_str + ".tif"
             modis_img = cv2.imread(path, -1)
-            modis_img = modis_img[starting_point_x:starting_point_x+self.patch_dim, starting_point_y:starting_point_y+self.patch_dim]
-            input_modis_seq[i,:,:] = modis_img
+            modis_img = modis_img[
+                starting_point_x : starting_point_x + self.patch_dim,
+                starting_point_y : starting_point_y + self.patch_dim,
+            ]
+            input_modis_seq[i, :, :] = modis_img
 
-
-        pred_modis_seq = np.zeros((self.prediction_seq_len, self.patch_dim, self.patch_dim))
+        pred_modis_seq = np.zeros(
+            (self.prediction_seq_len, self.patch_dim, self.patch_dim)
+        )
         for i, img_str in enumerate(pred_seq):
-            path = self.modis_image_path+"/"+img_str+".tif"
+            path = self.modis_image_path + "/" + img_str + ".tif"
             modis_img = cv2.imread(path, -1)
-            modis_img = modis_img[starting_point_x:starting_point_x+self.patch_dim, starting_point_y:starting_point_y+self.patch_dim]
-            pred_modis_seq[i,:,:] = modis_img
+            modis_img = modis_img[
+                starting_point_x : starting_point_x + self.patch_dim,
+                starting_point_y : starting_point_y + self.patch_dim,
+            ]
+            pred_modis_seq[i, :, :] = modis_img
 
         return (input_modis_seq, pred_modis_seq)
 
