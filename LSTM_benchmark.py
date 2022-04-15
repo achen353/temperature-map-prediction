@@ -1,4 +1,3 @@
-import torch
 import torch.nn as nn
 
 
@@ -10,7 +9,7 @@ class LSTM(nn.Module):
         pred_len,
         feature_size,
         dropout=0,
-        bidirectional = False
+        bidirectional=False,
     ):
         super(Transformer, self).__init__()
         # num_enc_layers (hyperparameter): number of the encoder layers
@@ -24,9 +23,13 @@ class LSTM(nn.Module):
 
         self.input_size = input_size
         self.pred_len = pred_len
-        self.lstm = nn.LSTM(input_size = self.input_size, hidden_size = feature_size, num_layers = num_layers, dropout = dropout, bidirectional = bidirectional)
-
-
+        self.lstm = nn.LSTM(
+            input_size=self.input_size,
+            hidden_size=feature_size,
+            num_layers=num_layers,
+            dropout=dropout,
+            bidirectional=bidirectional,
+        )
 
         self.linear1 = nn.Linear(feature_size, feature_size)
         self.l_relu1 = nn.LeakyReLU()
@@ -47,7 +50,6 @@ class LSTM(nn.Module):
         self.linear3.bias.data.zero_()
         self.linear3.weight.data.uniform_(-range, range)
 
-
     def forward(self, input):
 
         # input: shape is [seq_len, batch_size, input_size]
@@ -56,11 +58,9 @@ class LSTM(nn.Module):
 
         seq_len, batch_size, input_size = input.shape
 
-
-
         output, (h_n, c_n) = self.lstm(input, None)
 
-        output = output[-self.pred_len:, :, :]
+        output = output[-self.pred_len :, :, :]
 
         output = self.linear1(output)
         output = self.l_relu1()
@@ -91,7 +91,6 @@ class LSTM(nn.Module):
 #
 #         pred = model(x)
 #       ............
-
 
 
 ###############################################################
