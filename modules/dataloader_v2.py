@@ -110,7 +110,7 @@ class MODISDataset(Dataset):
                 seq_ids = getattr(self, "{}_data_seq_id".format(data_type))
                 data = getattr(self, "{}_data".format(data_type))
 
-                input_modis_sequences, pred_modis_sequences, input_seq_encodings = (
+                input_modis_sequences, pred_modis_sequences, seq_encodings = (
                     [],
                     [],
                     [],
@@ -126,8 +126,8 @@ class MODISDataset(Dataset):
                         (self.input_seq_len, self.patch_dim, self.patch_dim)
                     )
                     # At the same time, construct the encoding of each sequence
-                    # of shape [input_seq_len] based on `img_str`
-                    input_seq_enc = np.zeros(self.input_seq_len)
+                    # of shape [input_seq_len + prediction_seq_len] based on `img_str`
+                    seq_enc = np.zeros(self.input_seq_len + self.prediction_seq_len)
 
                     for j, img_str in enumerate(inp_seq):
                         # Read the image
@@ -157,7 +157,7 @@ class MODISDataset(Dataset):
                             3,
                         )
                         # Aggregate the encoding
-                        input_seq_enc[j] = enc
+                        seq_enc[j] = enc
 
                     # Construct the actual prediction image sequence of shape:
                     # [pred_seq_len, patch_dim, patch_dim]
@@ -175,20 +175,37 @@ class MODISDataset(Dataset):
                             int(seq_id[1]) : int(seq_id[1]) + self.patch_dim,
                             int(seq_id[2]) : int(seq_id[2]) + self.patch_dim,
                         ]
+                        # Aggregate the cropped patch
                         pred_modis_seq[j, :, :] = modis_img
+
+                        # Calculate the encoding
+                        if self.start_year is None:
+                            raise NameError(
+                                "Instance variable `start_year` is not defined."
+                            )
+                        time_tuple = datetime.strptime(img_str, "%Y_%m_%d").timetuple()
+                        total_yday = 366 if calendar.isleap(time_tuple.tm_year) else 365
+                        enc = round(
+                            time_tuple.tm_year
+                            - self.start_year
+                            + time_tuple.tm_yday / total_yday,
+                            3,
+                        )
+                        # Aggregate the encoding
+                        seq_enc[self.input_seq_len + j] = enc
 
                     input_modis_sequences.append(input_modis_seq)
                     pred_modis_sequences.append(pred_modis_seq)
-                    input_seq_encodings.append(input_seq_enc)
+                    seq_encodings.append(seq_enc)
 
                 input_modis_sequences = np.stack(input_modis_sequences)
                 pred_modis_sequences = np.stack(pred_modis_sequences)
-                input_seq_encodings = np.stack(input_seq_encodings)
+                seq_encodings = np.stack(seq_encodings)
 
                 data_group = h5file.create_group(data_type)
                 data_group.create_dataset("input", data=input_modis_sequences)
                 data_group.create_dataset("pred", data=pred_modis_sequences)
-                data_group.create_dataset("encodings", data=input_seq_encodings)
+                data_group.create_dataset("encodings", data=seq_encodings)
 
             h5file.close()
 
