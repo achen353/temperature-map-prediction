@@ -69,6 +69,7 @@ class MODISDataset(Dataset):
         number_validation_seq: int = 2,
         number_test_seq: int = 2,
         mode: str = "training",
+        use_diff: bool = False,
         modis_img_path: str = "./datasets/MOD11A2",
     ):
         self.patch_dim = patch_dim
@@ -78,6 +79,7 @@ class MODISDataset(Dataset):
         self.number_validation_seq = number_validation_seq
         self.number_test_seq = number_test_seq
         self.mode = mode
+        self.use_diff = use_diff
 
         self.modis_image_path = modis_img_path
 
@@ -403,6 +405,11 @@ class MODISDataset(Dataset):
             # 3. Fill NaNs in the patch with the global non-NaN mean
             for r in range(pred.shape[0]):
                 pred[r, :] = np.nan_to_num(pred[r, :], nan=pred_mean[r])
+
+            if self.use_diff:
+                # Use the temperature difference between each pair of consecutive images instead
+                input = np.concatenate((input[0:1, :], np.diff(input, axis=0)), axis=0)
+                pred = np.concatenate((pred[0:1, :], np.diff(pred, axis=0)), axis=0)
 
             batch_input.append(input)
             batch_pred.append(pred)
