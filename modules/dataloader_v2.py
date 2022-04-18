@@ -165,11 +165,11 @@ class MODISDataset(Dataset):
             print("[INFO] Saving created dataset to: {}".format(self.h5_path))
 
         print("[INFO] Loading dataset from: {}".format(self.h5_path))
-        
+
         self.dataset = h5py.File(
             self.h5_path, "r"
         )  # self.dataset is only a HDF5 pointer
-        
+
         print("[INFO] Dataset loaded.")
 
     def _sort_images_by_date(self) -> List[str]:

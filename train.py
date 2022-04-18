@@ -39,9 +39,9 @@ def main(config_path):
 
     model = model_class(**config["model"]["hyperparams"])
     device = model.device
-    
+
     model.to(model.device)
-    
+
     criterion = loss_class()
     optimizer = optimizer_class(model.parameters(), lr=config["optimizer"]["lr"])
     scheduler = scheduler_class(
@@ -75,17 +75,17 @@ def main(config_path):
         for i, (input, pred, encodings) in enumerate(train_dataloader):
             # Make sure batch_size is in the second dim
             input, pred = input.permute(1, 0, 2), pred.permute(1, 0, 2)
-            
+
             # Place tensors on GPU
             input, pred = input.to(device), pred.to(device)
 
             optimizer.zero_grad()
             output = model(input)
-            
+
             loss = criterion(output, pred)
             loss.backward()
             optimizer.step()
-            
+
             loss_val = loss.item()
             losses.append(loss_val)
 

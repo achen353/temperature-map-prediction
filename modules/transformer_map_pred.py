@@ -24,11 +24,11 @@ class Transformer(nn.Module):
         # has_pos: has position embedding or not
         # dropout: dropout of the transformer encoder
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        
+
         self.input_len = input_len
         self.pred_len = pred_len
         self.has_pos = has_pos
-        
+
         self.project_linear = nn.Linear(
             input_size, feature_size
         )  # project input to the feature_size
@@ -95,7 +95,9 @@ class Transformer(nn.Module):
 
         output = self.transformer_enc(output)
 
-        output = output[-self.pred_len:, :, :]  # only use the sequence of tokens to predict
+        output = output[
+            -self.pred_len :, :, :
+        ]  # only use the sequence of tokens to predict
 
         output = self.linear1(output)
         output = self.l_relu1(output)
