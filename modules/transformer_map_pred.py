@@ -41,7 +41,7 @@ class Transformer(nn.Module):
         )
 
         if self.has_pos:
-            self.pos_layer = nn.Linear(input_size, input_size)
+            self.pos_layer = nn.Linear(1, input_size)
 
         self.linear1 = nn.Linear(feature_size, feature_size)
         self.l_relu1 = nn.LeakyReLU()
@@ -73,7 +73,7 @@ class Transformer(nn.Module):
         # input: shape is [seq_len, batch_size, input_size]
         # pos_info: shape is [seq_len + pred_len, batch_size, 1]
         # token_is_zero: if True, then use zero tensor, otherwise use the last tensor from the input
-        seq_len, batch_size, input_size = input.shape
+        _, batch_size, input_size = input.shape
 
         if token_is_zero:
             tokens = torch.zeros(
@@ -87,8 +87,7 @@ class Transformer(nn.Module):
 
         if self.has_pos:
             if pos_info is None:
-                print("pos info is None!")
-                exit()
+                raise ValueError("Argument `pos_info` is not provided.")
 
             pos_enc = self.pos_layer(
                 pos_info
@@ -108,8 +107,6 @@ class Transformer(nn.Module):
         output = self.linear2(output)
         output = self.l_relu2(output)
         output = self.linear3(output)
-
-        # TODO: Fix output all NaN (@Chen)
 
         return output
 

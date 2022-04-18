@@ -59,9 +59,7 @@ class LSTM(nn.Module):
         # pos_info: shape is [seq_len + pred_len, batch_size, 1]
         # token_is_zero: if True, then use zero tensor, otherwise use the last tensor from the input
 
-        seq_len, batch_size, input_size = input.shape
-
-        output, (h_n, c_n) = self.lstm(input, None)
+        output, _ = self.lstm(input, None)
 
         output = output[-self.pred_len :, :, :]
 
@@ -70,8 +68,6 @@ class LSTM(nn.Module):
         output = self.linear2(output)
         output = self.l_relu2(output)
         output = self.linear3(output)
-
-        # TODO: Fix output all NaN (@Chen)
 
         return output
 
