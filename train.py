@@ -77,10 +77,14 @@ def main(config_path):
             input, pred = input.permute(1, 0, 2), pred.permute(1, 0, 2)
 
             # Place tensors on GPU
-            input, pred = input.to(device), pred.to(device)
+            input, pred, encodings = (
+                input.to(device),
+                pred.to(device),
+                encodings.to(device),
+            )
 
             optimizer.zero_grad()
-            output = model(input)
+            output = model(input, pos_info=encodings)
 
             loss = criterion(output, pred)
             loss.backward()
