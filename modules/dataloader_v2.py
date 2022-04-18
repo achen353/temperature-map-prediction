@@ -36,7 +36,6 @@ __email__ = "sourish.dhekane@gatech.edu"
 __status__ = ""
 
 # Dependencies.
-import encodings
 import os
 import random
 import re
