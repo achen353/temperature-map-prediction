@@ -72,9 +72,14 @@ def main(config_path):
 
     for epoch in range(EPOCH):
         losses = []
+        model.train()
         for i, (input, pred, encodings) in enumerate(train_dataloader):
             # Make sure batch_size is in the second dim
-            input, pred = input.permute(1, 0, 2), pred.permute(1, 0, 2)
+            input, pred, encodings = (
+                input.permute(1, 0, 2),
+                pred.permute(1, 0, 2),
+                encodings.permute(1, 0).unsqueeze(dim=-1),
+            )
 
             # Place tensors on GPU
             input, pred, encodings = (
@@ -84,7 +89,11 @@ def main(config_path):
             )
 
             optimizer.zero_grad()
-            output = model(input, pos_info=encodings)
+
+            if model_class == Transformer:
+                output = model(input, pos_info=encodings)
+            else:
+                output = model(input)
 
             loss = criterion(output, pred)
             loss.backward()
@@ -102,15 +111,28 @@ def main(config_path):
             # TODO: Add evaluation metric (@Andrew)
             v_losses = []
             for i, (v_input, v_pred, v_encodings) in enumerate(valid_dataloader):
-                v_input, v_pred = v_input.permute(1, 0, 2), v_pred.permute(1, 0, 2)
-                v_input, v_pred = v_input.to(device), v_pred.to(device)
-                v_output = model(v_input)
+                v_input, v_pred, v_encodings = (
+                    v_input.permute(1, 0, 2),
+                    v_pred.permute(1, 0, 2),
+                    v_encodings.permute(1, 0).unsqueeze(dim=-1),
+                )
+
+                v_input, v_pred, v_encodings = (
+                    v_input.to(device),
+                    v_pred.to(device),
+                    v_encodings.to(device),
+                )
+
+                if model_class == Transformer:
+                    v_output = model(v_input, pos_info=v_encodings)
+                else:
+                    v_output = model(v_input)
+
                 v_loss = criterion(v_output, v_pred)
                 v_loss_val = v_loss.item()
                 v_losses.append(v_loss_val)
-            writer.add_scalar("loss/valid_epoch", np.mean(v_losses), epoch)
 
-        model.train()
+            writer.add_scalar("loss/valid_epoch", np.mean(v_losses), epoch)
 
         torch.save(
             {

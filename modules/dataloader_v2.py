@@ -69,6 +69,7 @@ class MODISDataset(Dataset):
         number_validation_seq: int = 2,
         number_test_seq: int = 2,
         mode: str = "training",
+        use_diff: bool = False,
         modis_img_path: str = "./datasets/MOD11A2",
     ):
         self.patch_dim = patch_dim
@@ -78,6 +79,7 @@ class MODISDataset(Dataset):
         self.number_validation_seq = number_validation_seq
         self.number_test_seq = number_test_seq
         self.mode = mode
+        self.use_diff = use_diff
 
         self.modis_image_path = modis_img_path
 
@@ -108,7 +110,7 @@ class MODISDataset(Dataset):
                 seq_ids = getattr(self, "{}_data_seq_id".format(data_type))
                 data = getattr(self, "{}_data".format(data_type))
 
-                input_modis_sequences, pred_modis_sequences, input_seq_encodings = (
+                input_modis_sequences, pred_modis_sequences, seq_encodings = (
                     [],
                     [],
                     [],
@@ -124,8 +126,8 @@ class MODISDataset(Dataset):
                         (self.input_seq_len, self.patch_dim, self.patch_dim)
                     )
                     # At the same time, construct the encoding of each sequence
-                    # of shape [input_seq_len] based on `img_str`
-                    input_seq_enc = np.zeros(self.input_seq_len)
+                    # of shape [input_seq_len + prediction_seq_len] based on `img_str`
+                    seq_enc = np.zeros(self.input_seq_len + self.prediction_seq_len)
 
                     for j, img_str in enumerate(inp_seq):
                         # Read the image
@@ -155,7 +157,7 @@ class MODISDataset(Dataset):
                             3,
                         )
                         # Aggregate the encoding
-                        input_seq_enc[j] = enc
+                        seq_enc[j] = enc
 
                     # Construct the actual prediction image sequence of shape:
                     # [pred_seq_len, patch_dim, patch_dim]
@@ -173,20 +175,37 @@ class MODISDataset(Dataset):
                             int(seq_id[1]) : int(seq_id[1]) + self.patch_dim,
                             int(seq_id[2]) : int(seq_id[2]) + self.patch_dim,
                         ]
+                        # Aggregate the cropped patch
                         pred_modis_seq[j, :, :] = modis_img
+
+                        # Calculate the encoding
+                        if self.start_year is None:
+                            raise NameError(
+                                "Instance variable `start_year` is not defined."
+                            )
+                        time_tuple = datetime.strptime(img_str, "%Y_%m_%d").timetuple()
+                        total_yday = 366 if calendar.isleap(time_tuple.tm_year) else 365
+                        enc = round(
+                            time_tuple.tm_year
+                            - self.start_year
+                            + time_tuple.tm_yday / total_yday,
+                            3,
+                        )
+                        # Aggregate the encoding
+                        seq_enc[self.input_seq_len + j] = enc
 
                     input_modis_sequences.append(input_modis_seq)
                     pred_modis_sequences.append(pred_modis_seq)
-                    input_seq_encodings.append(input_seq_enc)
+                    seq_encodings.append(seq_enc)
 
                 input_modis_sequences = np.stack(input_modis_sequences)
                 pred_modis_sequences = np.stack(pred_modis_sequences)
-                input_seq_encodings = np.stack(input_seq_encodings)
+                seq_encodings = np.stack(seq_encodings)
 
                 data_group = h5file.create_group(data_type)
                 data_group.create_dataset("input", data=input_modis_sequences)
                 data_group.create_dataset("pred", data=pred_modis_sequences)
-                data_group.create_dataset("encodings", data=input_seq_encodings)
+                data_group.create_dataset("encodings", data=seq_encodings)
 
             h5file.close()
 
@@ -388,12 +407,26 @@ class MODISDataset(Dataset):
 
             # Fill in NaN values with average of non-NaN pixels in the patch
             # 1. Obtain global non-NaN mean of each patch
-            nanmean = np.nanmean(input, axis=1)
+            input_mean = np.nanmean(input, axis=1)
             # 2. If any global mean is NaN, fill with 0
-            nanmean = np.nan_to_num(nanmean)
+            input_mean = np.nan_to_num(input_mean)
             # 3. Fill NaNs in the patch with the global non-NaN mean
             for r in range(input.shape[0]):
-                input[r, :] = np.nan_to_num(input[r, :], nan=nanmean[r])
+                input[r, :] = np.nan_to_num(input[r, :], nan=input_mean[r])
+
+            # Fill in NaN values with average of non-NaN pixels in the patch
+            # 1. Obtain global non-NaN mean of each patch
+            pred_mean = np.nanmean(pred, axis=1)
+            # 2. If any global mean is NaN, fill with 0
+            pred_mean = np.nan_to_num(pred_mean)
+            # 3. Fill NaNs in the patch with the global non-NaN mean
+            for r in range(pred.shape[0]):
+                pred[r, :] = np.nan_to_num(pred[r, :], nan=pred_mean[r])
+
+            if self.use_diff:
+                # Use the temperature difference between each pair of consecutive images instead
+                input = np.concatenate((input[0:1, :], np.diff(input, axis=0)), axis=0)
+                pred = np.concatenate((pred[0:1, :], np.diff(pred, axis=0)), axis=0)
 
             batch_input.append(input)
             batch_pred.append(pred)

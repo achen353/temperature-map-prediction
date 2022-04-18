@@ -38,6 +38,7 @@
             "number_training_seq": 80,
             "number_validation_seq": 10,
             "number_test_seq": 10,
+            "use_diff": false,
             "modis_img_path": "./datasets/MOD11A2"
         }
     },
