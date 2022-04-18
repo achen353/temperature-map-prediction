@@ -24,7 +24,11 @@ class Transformer(nn.Module):
         # has_pos: has position embedding or not
         # dropout: dropout of the transformer encoder
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+        self.input_len = input_len
+        self.pred_len = pred_len
         self.has_pos = has_pos
+        
         self.project_linear = nn.Linear(
             input_size, feature_size
         )  # project input to the feature_size
@@ -33,7 +37,7 @@ class Transformer(nn.Module):
             d_model=feature_size, nhead=NHEAD, dropout=dropout
         )
         self.transformer_enc = nn.TransformerEncoder(
-            self.encoder_layer3, num_layers=num_enc_layers
+            self.encoder_layer, num_layers=num_enc_layers
         )
 
         if self.has_pos:
@@ -66,11 +70,9 @@ class Transformer(nn.Module):
             self.pos_layer.weight.data.uniform_(-range, range)
 
     def forward(self, input, pos_info=None, token_is_zero=True):
-
         # input: shape is [seq_len, batch_size, input_size]
         # pos_info: shape is [seq_len + pred_len, batch_size, 1]
         # token_is_zero: if True, then use zero tensor, otherwise use the last tensor from the input
-
         seq_len, batch_size, input_size = input.shape
 
         if token_is_zero:
@@ -93,12 +95,12 @@ class Transformer(nn.Module):
 
         output = self.transformer_enc(output)
 
-        output = output[input_size:, :, :]  # only use the sequence of tokens to predict
+        output = output[-self.pred_len:, :, :]  # only use the sequence of tokens to predict
 
         output = self.linear1(output)
-        output = self.l_relu1()
+        output = self.l_relu1(output)
         output = self.linear2(output)
-        output = self.l_relu2()
+        output = self.l_relu2(output)
         output = self.linear3(output)
 
         return output

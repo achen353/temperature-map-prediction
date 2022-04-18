@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 
 
@@ -11,8 +12,8 @@ class LSTM(nn.Module):
         dropout=0,
         bidirectional=False,
     ):
-        super(Transformer, self).__init__()
-        # num_enc_layers (hyperparameter): number of the encoder layers
+        super(LSTM, self).__init__()
+        # num_layers (hyperparameter): number of the encoder layers
         # input_size: number of pixel per map
         # input_len: number of input maps
         # pred_len: number of predict maps
@@ -20,6 +21,7 @@ class LSTM(nn.Module):
         # NHEAD: number of heads in the transformer encoder
         # has_pos: has position embedding or not
         # dropout: dropout of the transformer encoder
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.input_size = input_size
         self.pred_len = pred_len
@@ -63,9 +65,9 @@ class LSTM(nn.Module):
         output = output[-self.pred_len :, :, :]
 
         output = self.linear1(output)
-        output = self.l_relu1()
+        output = self.l_relu1(output)
         output = self.linear2(output)
-        output = self.l_relu2()
+        output = self.l_relu2(output)
         output = self.linear3(output)
 
         return output
