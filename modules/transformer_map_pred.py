@@ -86,8 +86,12 @@ class Transformer(nn.Module):
         output = torch.cat((input, tokens.to(self.device)), 0)  # cat two tensors
 
         if self.has_pos:
+            if pos_info is None:
+                print("pos info is None!")
+                exit()
+
             pos_enc = self.pos_layer(
-                output
+                pos_info
             )  # using linear transform as the position embedding
             output = torch.add(pos_enc, output)  # add position info and input
 
@@ -115,7 +119,10 @@ class Transformer(nn.Module):
 ###############################################################
 
 # model = Transformer(num_enc_layers=3, input_size=400, input_len=20, pred_len=5, feature_size = 512, NHEAD=4, has_pos=True).to(device)
-# pos_info = [[1], [2], ..., [25]] # assummed
+#
+# if has_pos:
+#   pos_info = [[1], [2], ..., [25]] # assummed
+#
 # criterion = nn.MSELoss()
 # optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 # scheduler = StepLR(optimizer, step_size=100, gamma=0.99)

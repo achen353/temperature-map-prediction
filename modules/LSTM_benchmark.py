@@ -15,12 +15,10 @@ class LSTM(nn.Module):
         super(LSTM, self).__init__()
         # num_layers (hyperparameter): number of the encoder layers
         # input_size: number of pixel per map
-        # input_len: number of input maps
         # pred_len: number of predict maps
         # feature_size (hyperparameter): feature_size in the transformer encoder
-        # NHEAD: number of heads in the transformer encoder
-        # has_pos: has position embedding or not
         # dropout: dropout of the transformer encoder
+        # bidirectional: if model is bidirectional
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.input_size = input_size
@@ -32,6 +30,9 @@ class LSTM(nn.Module):
             dropout=dropout,
             bidirectional=bidirectional,
         )
+
+        if bidirectional:
+            feature_size *= 2
 
         self.linear1 = nn.Linear(feature_size, feature_size)
         self.l_relu1 = nn.LeakyReLU()
