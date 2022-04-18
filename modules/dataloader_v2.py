@@ -388,12 +388,21 @@ class MODISDataset(Dataset):
 
             # Fill in NaN values with average of non-NaN pixels in the patch
             # 1. Obtain global non-NaN mean of each patch
-            nanmean = np.nanmean(input, axis=1)
+            input_mean = np.nanmean(input, axis=1)
             # 2. If any global mean is NaN, fill with 0
-            nanmean = np.nan_to_num(nanmean)
+            input_mean = np.nan_to_num(input_mean)
             # 3. Fill NaNs in the patch with the global non-NaN mean
             for r in range(input.shape[0]):
-                input[r, :] = np.nan_to_num(input[r, :], nan=nanmean[r])
+                input[r, :] = np.nan_to_num(input[r, :], nan=input_mean[r])
+
+            # Fill in NaN values with average of non-NaN pixels in the patch
+            # 1. Obtain global non-NaN mean of each patch
+            pred_mean = np.nanmean(pred, axis=1)
+            # 2. If any global mean is NaN, fill with 0
+            pred_mean = np.nan_to_num(pred_mean)
+            # 3. Fill NaNs in the patch with the global non-NaN mean
+            for r in range(pred.shape[0]):
+                pred[r, :] = np.nan_to_num(pred[r, :], nan=pred_mean[r])
 
             batch_input.append(input)
             batch_pred.append(pred)
