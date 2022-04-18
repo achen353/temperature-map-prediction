@@ -127,11 +127,11 @@ def main(config_path):
                     v_output = model(v_input, pos_info=v_encodings)
                 else:
                     v_output = model(v_input)
-                
+
                 v_loss = criterion(v_output, v_pred)
                 v_loss_val = v_loss.item()
                 v_losses.append(v_loss_val)
-            
+
             writer.add_scalar("loss/valid_epoch", np.mean(v_losses), epoch)
 
         torch.save(
