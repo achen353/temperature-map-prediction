@@ -4,8 +4,13 @@ In this project, we aim to analyze and extrapolate the trends in land surface te
 maps in near future.
 
 ## Development
-### Dataset
-For this project, we use the MOD11A2 dataset. Put all the raw `.tif` images together with the following directory structure:
+### Setup/Dataset
+Install the dependencies via: 
+```
+pip install -r requirements.txt
+```
+
+For this project, we use the MOD11A2 dataset. Put all the raw `.tif` images together as shown below:
 ```
 temperature-map-prediction (project root)
 ├── datasets
@@ -16,6 +21,14 @@ temperature-map-prediction (project root)
 │       ...
 ...        
 ```
+### Train the Model
+Run the following command to train the model
+```
+python train.py --config <config_name>
+```
+where `<config_name>` is the config file name like `transformer.json`. 
+
+The default config has been set to `transformer.json` so no config argument is needed if training the Transformer model.
 
 ### Auto-formatting
 Run the following command for auto-reformatting:
