@@ -4,10 +4,23 @@ In this project, we aim to analyze and extrapolate the trends in land surface te
 maps in near future.
 
 ## Development
+### Dataset
+For this project, we use the MOD11A2 dataset. Put all the raw `.tif` images together with the following directory structure:
+```
+temperature-map-prediction (project root)
+├── datasets
+│   └── MOD11A2
+│       └── <image1>
+│       └── <image2>
+│       └── <image1>
+│       ...
+...        
+```
+
 ### Auto-formatting
 Run the following command for auto-reformatting:
 ```
-bash ./auto_format.sh
+bash ./scripts/auto_format.sh
 ```
 **Every commit made to the repository also goes through the same auto-reformatting on GitHub.**
 If your remote branch is auto-reformatted, your new local commits may be rejected. 
