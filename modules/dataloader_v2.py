@@ -211,6 +211,8 @@ class MODISDataset(Dataset):
         no_of_imgs = len(image_list)
 
         while True:
+            # TODO: There could be a large percentage of NaN in the selected patch sequence (@Sourish)
+
             # Random selection of sequence starting date
             seq_starting_point = random.randint(
                 0, no_of_imgs - (self.input_seq_len + self.prediction_seq_len + 1)

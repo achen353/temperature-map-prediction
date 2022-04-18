@@ -95,6 +95,7 @@ def main(config_path):
 
         model.eval()
         with torch.no_grad():
+            # TODO: Add evaluation metric (@Andrew)
             v_losses = []
             for i, (v_input, v_pred, v_encodings) in enumerate(valid_dataloader):
                 v_input, v_pred = v_input.permute(1, 0, 2), v_pred.permute(1, 0, 2)

@@ -103,6 +103,8 @@ class Transformer(nn.Module):
         output = self.l_relu2(output)
         output = self.linear3(output)
 
+        # TODO: Fix output all NaN (@Chen)
+
         return output
 
 
