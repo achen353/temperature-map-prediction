@@ -87,7 +87,7 @@ class Transformer(nn.Module):
 
         if self.has_pos:
             if pos_info is None:
-                print('pos info is None!')
+                print("pos info is None!")
                 exit()
 
             pos_enc = self.pos_layer(
