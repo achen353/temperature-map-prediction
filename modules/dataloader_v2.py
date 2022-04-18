@@ -36,6 +36,7 @@ __email__ = "sourish.dhekane@gatech.edu"
 __status__ = ""
 
 # Dependencies.
+import calendar
 import os
 import random
 import re
@@ -81,12 +82,10 @@ class MODISDataset(Dataset):
         self.modis_image_path = modis_img_path
 
         self.unique_datapoints_set = set()
+        self.nan_threshold = 0.2
         self.training_data_seq_id = None
         self.test_data_seq_id = None
         self.validation_data_seq_id = None
-        self.training_data_encodings = None
-        self.test_data_encodings = None
-        self.validation_data_encodings = None
 
         self.h5_path = "dataset.h5"
 
@@ -108,9 +107,12 @@ class MODISDataset(Dataset):
             for data_type in ["training", "test", "validation"]:
                 seq_ids = getattr(self, "{}_data_seq_id".format(data_type))
                 data = getattr(self, "{}_data".format(data_type))
-                encodings = getattr(self, "{}_data_encodings".format(data_type))
 
-                input_modis_sequences, pred_modis_sequences = [], []
+                input_modis_sequences, pred_modis_sequences, input_seq_encodings = (
+                    [],
+                    [],
+                    [],
+                )
 
                 for i, data_point in enumerate(data):
                     inp_seq, pred_seq = data_point
@@ -121,16 +123,39 @@ class MODISDataset(Dataset):
                     input_modis_seq = np.zeros(
                         (self.input_seq_len, self.patch_dim, self.patch_dim)
                     )
+                    # At the same time, construct the encoding of each sequence
+                    # of shape [input_seq_len] based on `img_str`
+                    input_seq_enc = np.zeros(self.input_seq_len)
+
                     for j, img_str in enumerate(inp_seq):
+                        # Read the image
                         image_path = os.path.join(
                             self.modis_image_path, img_str + ".tif"
                         )
                         modis_img = cv2.imread(image_path, -1)
+                        # Perform cropping
                         modis_img = modis_img[
                             int(seq_id[1]) : int(seq_id[1]) + self.patch_dim,
                             int(seq_id[2]) : int(seq_id[2]) + self.patch_dim,
                         ]
+                        # Aggregate the cropped patch
                         input_modis_seq[j, :, :] = modis_img
+
+                        # Calculate the encoding
+                        if self.start_year is None:
+                            raise NameError(
+                                "Instance variable `start_year` is not defined."
+                            )
+                        time_tuple = datetime.strptime(img_str, "%Y_%m_%d").timetuple()
+                        total_yday = 366 if calendar.isleap(time_tuple.tm_year) else 365
+                        enc = round(
+                            time_tuple.tm_year
+                            - self.start_year
+                            + time_tuple.tm_yday / total_yday,
+                            3,
+                        )
+                        # Aggregate the encoding
+                        input_seq_enc[j] = enc
 
                     # Construct the actual prediction image sequence of shape:
                     # [pred_seq_len, patch_dim, patch_dim]
@@ -138,10 +163,12 @@ class MODISDataset(Dataset):
                         (self.prediction_seq_len, self.patch_dim, self.patch_dim)
                     )
                     for j, img_str in enumerate(pred_seq):
+                        # Read the image
                         image_path = os.path.join(
                             self.modis_image_path, img_str + ".tif"
                         )
                         modis_img = cv2.imread(image_path, -1)
+                        # Perform cropping
                         modis_img = modis_img[
                             int(seq_id[1]) : int(seq_id[1]) + self.patch_dim,
                             int(seq_id[2]) : int(seq_id[2]) + self.patch_dim,
@@ -150,14 +177,16 @@ class MODISDataset(Dataset):
 
                     input_modis_sequences.append(input_modis_seq)
                     pred_modis_sequences.append(pred_modis_seq)
+                    input_seq_encodings.append(input_seq_enc)
 
                 input_modis_sequences = np.stack(input_modis_sequences)
                 pred_modis_sequences = np.stack(pred_modis_sequences)
+                input_seq_encodings = np.stack(input_seq_encodings)
 
                 data_group = h5file.create_group(data_type)
                 data_group.create_dataset("input", data=input_modis_sequences)
                 data_group.create_dataset("pred", data=pred_modis_sequences)
-                data_group.create_dataset("encodings", data=encodings)
+                data_group.create_dataset("encodings", data=input_seq_encodings)
 
             h5file.close()
 
@@ -189,6 +218,11 @@ class MODISDataset(Dataset):
         # Sort the list based on dates
         image_list.sort(key=lambda x: datetime.strptime(x, "%Y_%m_%d"))
 
+        # Get the starting year of the dataset
+        self.start_year = (
+            datetime.strptime(image_list[0], "%Y_%m_%d").timetuple().tm_year
+        )
+
         return image_list
 
     def _prepare_single_sequence(
@@ -210,8 +244,6 @@ class MODISDataset(Dataset):
         no_of_imgs = len(image_list)
 
         while True:
-            # TODO: There could be a large percentage of NaN in the selected patch sequence (@Sourish)
-
             # Random selection of sequence starting date
             seq_starting_point = random.randint(
                 0, no_of_imgs - (self.input_seq_len + self.prediction_seq_len + 1)
@@ -244,10 +276,20 @@ class MODISDataset(Dataset):
                 0, modis_img_breadth - (self.patch_dim + 1)
             )
 
-            # If the sequence is unique, return it. Otherwise, repeat until we generate
-            # a unique sequence
+            # Check NaN percentage (only check the first image of the sequence)
+            modis_img = modis_img[
+                starting_point_x : starting_point_x + self.patch_dim,
+                starting_point_y : starting_point_y + self.patch_dim,
+            ]
+            nan_ratio = np.sum(np.isnan(modis_img)) / modis_img.size
+
+            # If the sequence is unique and has few enough Nan, return it.
+            # Otherwise, repeat until we generate one that satisfies
             seq_identifiers = (seq_starting_point, starting_point_x, starting_point_y)
-            if seq_identifiers not in self.unique_datapoints_set:
+            if (
+                seq_identifiers not in self.unique_datapoints_set
+                and nan_ratio < self.nan_threshold
+            ):
                 self.unique_datapoints_set.add(seq_identifiers)
                 break
 
@@ -272,16 +314,12 @@ class MODISDataset(Dataset):
                 data_seqs.append(seq)
                 data_seq_id.append(seq_id)
 
-            # Prepare encodings necessary for the transformer model based on the timestamp of the image
-            encodings = [float(x[0] / 365) for x in data_seq_id]
-
             # Store the `data_seqs` and `data_seq_id` as instance variables
             # e.g. self.training_data = data_seqs
             #      self.training_data_seq_id = data_seq_id
             #      self.training_data_encodings = encodings
             setattr(self, "{}_data".format(data_type), data_seqs)
             setattr(self, "{}_data_seq_id".format(data_type), data_seq_id)
-            setattr(self, "{}_data_encodings".format(data_type), encodings)
 
     def _create_dir(self, dir_name: str):
         """
@@ -347,6 +385,15 @@ class MODISDataset(Dataset):
             # Flatten the image
             input = input.reshape((input.shape[0], -1))
             pred = pred.reshape((pred.shape[0], -1))
+
+            # Fill in NaN values with average of non-NaN pixels in the patch
+            # 1. Obtain global non-NaN mean of each patch
+            nanmean = np.nanmean(input, axis=1)
+            # 2. If any global mean is NaN, fill with 0
+            nanmean = np.nan_to_num(nanmean)
+            # 3. Fill NaNs in the patch with the global non-NaN mean
+            for r in range(input.shape[0]):
+                input[r, :] = np.nan_to_num(input[r, :], nan=nanmean[r])
 
             batch_input.append(input)
             batch_pred.append(pred)
