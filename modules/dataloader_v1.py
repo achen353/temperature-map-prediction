@@ -62,7 +62,7 @@ class MODISDataLoader(data.Dataset):
         number_training_seq: int = 10,
         number_validation_seq: int = 2,
         mode: str = "train",
-        modis_img_path: str = "./MOD11A1_Dataset",
+        modis_img_path: str = "./datasets/MOD11A2",
     ):
         self.patch_dim = patch_dim
         self.input_seq_len = input_seq_len

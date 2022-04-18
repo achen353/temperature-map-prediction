@@ -8,18 +8,16 @@ Script for the Dataloader of the MODIS images
 
 Classes
 -------
-MODISDataLoader
+MODISDataset
 
 Functions
 ---------
 __init__
-sort_images_by_date
-prepare_data_sequence
-prepare_train_test_validation_data
-create_dir
-save_data_into_dir
-save_train_test_validation_data
-prepare_encodings
+_init_dataset
+_sort_images_by_date
+_prepare_single_sequence
+_prepare_train_test_validation_data
+_create_dir
 __getitem__
 __len__
 
@@ -32,43 +30,46 @@ __author__ = "Sourish Gunesh Dhekane"
 __copyright__ = ""
 __credits__ = []
 __license__ = ""
-__version__ = "2.0"
+__version__ = "2.1"
 __maintainer__ = "Sourish Gunesh Dhekane"
 __email__ = "sourish.dhekane@gatech.edu"
 __status__ = ""
 
-import glob
 # Dependencies.
+import encodings
 import os
 import random
+import re
 import shutil
 from datetime import datetime
 from typing import List, Tuple
 
 import cv2
+import h5py
 import numpy as np
-import torch.utils.data as data
+import torch
+from torch.utils.data import Dataset
 
 # Main.
 if __name__ == "__main__":
     pass
 
 
-class MODISDataLoader(data.Dataset):
+class MODISDataset(Dataset):
     """
     Class for loading MODIS Images
     """
 
     def __init__(
         self,
-        patch_dim: int = 50,
-        input_seq_len: int = 5,
-        prediction_seq_len: int = 1,
+        patch_dim: int = 16,
+        input_seq_len: int = 10,
+        prediction_seq_len: int = 3,
         number_training_seq: int = 10,
         number_validation_seq: int = 2,
         number_test_seq: int = 2,
-        mode: str = "train",
-        modis_img_path: str = "./MOD11A1_Dataset",
+        mode: str = "training",
+        modis_img_path: str = "./datasets/MOD11A2",
     ):
         self.patch_dim = patch_dim
         self.input_seq_len = input_seq_len
@@ -77,6 +78,7 @@ class MODISDataLoader(data.Dataset):
         self.number_validation_seq = number_validation_seq
         self.number_test_seq = number_test_seq
         self.mode = mode
+
         self.modis_image_path = modis_img_path
 
         self.unique_datapoints_set = set()
@@ -87,39 +89,111 @@ class MODISDataLoader(data.Dataset):
         self.test_data_encodings = None
         self.validation_data_encodings = None
 
-        self.image_list = self.sort_images_by_date()
-        (
-            self.training_data,
-            self.test_data,
-            self.validation_data,
-        ) = self.prepare_train_test_validation_data(self.image_list)
-        self.save_train_test_validation_data(
-            self.training_data, self.test_data, self.validation_data
-        )
-        self.prepare_encodings()
+        self.h5_path = "dataset.h5"
 
-    def sort_images_by_date(self) -> List[str]:
+        self._init_dataset()
+
+    def _init_dataset(self):
+        """
+        Initialize the dataset and store them as `dataset.h5`
+        """
+        if not os.path.exists(self.h5_path):
+            print("[INFO] Creating dataset...")
+
+            # Split the data and prepare them
+            self._prepare_train_test_validation_data()
+
+            # Start writing to h5py file
+            h5file = h5py.File(self.h5_path, "w")
+
+            for data_type in ["training", "test", "validation"]:
+                seq_ids = getattr(self, "{}_data_seq_id".format(data_type))
+                data = getattr(self, "{}_data".format(data_type))
+                encodings = getattr(self, "{}_data_encodings".format(data_type))
+
+                input_modis_sequences, pred_modis_sequences = [], []
+
+                for i, data_point in enumerate(data):
+                    inp_seq, pred_seq = data_point
+                    seq_id = seq_ids[i]
+
+                    # Construct the actual input image sequence of shape:
+                    # [input_seq_len, patch_dim, patch_dim]
+                    input_modis_seq = np.zeros(
+                        (self.input_seq_len, self.patch_dim, self.patch_dim)
+                    )
+                    for j, img_str in enumerate(inp_seq):
+                        image_path = os.path.join(
+                            self.modis_image_path, img_str + ".tif"
+                        )
+                        modis_img = cv2.imread(image_path, -1)
+                        modis_img = modis_img[
+                            int(seq_id[1]) : int(seq_id[1]) + self.patch_dim,
+                            int(seq_id[2]) : int(seq_id[2]) + self.patch_dim,
+                        ]
+                        input_modis_seq[j, :, :] = modis_img
+
+                    # Construct the actual prediction image sequence of shape:
+                    # [pred_seq_len, patch_dim, patch_dim]
+                    pred_modis_seq = np.zeros(
+                        (self.prediction_seq_len, self.patch_dim, self.patch_dim)
+                    )
+                    for j, img_str in enumerate(pred_seq):
+                        image_path = os.path.join(
+                            self.modis_image_path, img_str + ".tif"
+                        )
+                        modis_img = cv2.imread(image_path, -1)
+                        modis_img = modis_img[
+                            int(seq_id[1]) : int(seq_id[1]) + self.patch_dim,
+                            int(seq_id[2]) : int(seq_id[2]) + self.patch_dim,
+                        ]
+                        pred_modis_seq[j, :, :] = modis_img
+
+                    input_modis_sequences.append(input_modis_seq)
+                    pred_modis_sequences.append(pred_modis_seq)
+
+                input_modis_sequences = np.stack(input_modis_sequences)
+                pred_modis_sequences = np.stack(pred_modis_sequences)
+
+                data_group = h5file.create_group(data_type)
+                data_group.create_dataset("input", data=input_modis_sequences)
+                data_group.create_dataset("pred", data=pred_modis_sequences)
+                data_group.create_dataset("encodings", data=encodings)
+
+            h5file.close()
+
+            print("[INFO] Saving created dataset to: {}".format(self.h5_path))
+
+        print("[INFO] Loading dataset from: {}".format(self.h5_path))
+        
+        self.dataset = h5py.File(
+            self.h5_path, "r"
+        )  # self.dataset is only a HDF5 pointer
+        
+        print("[INFO] Dataset loaded.")
+
+    def _sort_images_by_date(self) -> List[str]:
         """
         Collect image names in a list, sort that list, and return it
 
         Returns:
         -   list[str]: a list of image names in a sorted order
         """
-        new_image_list = [
-            os.path.basename(x).replace(".tif", "")
-            for x in glob.glob(self.modis_image_path + "/*.tif")
-        ]  # Create list of images
-        new_image_list = [
-            x for x in new_image_list if "(1)" not in x
-        ]  # Remove duplicates
-        new_image_list.sort(
-            key=lambda x: datetime.strptime(x, "%Y_%m_%d")
-        )  # Sort the list based on dates
+        pattern = re.compile(r"^\d{4}_\d{2}_\d{2}.tif$")
 
-        return new_image_list
+        # Create list of images
+        image_list = [
+            filename.split(".")[0]
+            for filename in os.listdir(self.modis_image_path)
+            if pattern.search(filename)
+        ]
+        # Sort the list based on dates
+        image_list.sort(key=lambda x: datetime.strptime(x, "%Y_%m_%d"))
 
-    def prepare_data_sequence(
-        self, new_image_list: List[str]
+        return image_list
+
+    def _prepare_single_sequence(
+        self, image_list: List[str]
     ) -> Tuple[Tuple[List[str], List[str]], Tuple[int, int, int]]:
         """
         Prepare one data point of the sequence-to-sequence prediction problem
@@ -133,31 +207,35 @@ class MODISDataLoader(data.Dataset):
                                  represents the x-coordinate of the top-left point of the selected path, and the
                                 third number represents the y-coordinate of the top-left point of the selected path
         """
-        input_seq = None
-        pred_seq = None
-        seq_identifiers = None
+        input_seq, pred_seq, seq_identifiers = None, None, None
+        no_of_imgs = len(image_list)
 
-        no_of_imgs = len(new_image_list)
-        flag = 0
-
-        while flag == 0:
+        while True:
+            # Random selection of sequence starting date
             seq_starting_point = random.randint(
                 0, no_of_imgs - (self.input_seq_len + self.prediction_seq_len + 1)
             )
-            input_seq = new_image_list[
+
+            # Obtain the dates of the input sequence
+            input_seq = image_list[
                 seq_starting_point : seq_starting_point + self.input_seq_len
             ]
-            pred_seq = new_image_list[
+
+            # Obtain the dates of the corresponding prediction sequence
+            pred_seq = image_list[
                 seq_starting_point
                 + self.input_seq_len : seq_starting_point
                 + self.input_seq_len
                 + self.prediction_seq_len
             ]
 
-            path = self.modis_image_path + "/" + input_seq[0] + ".tif"
-            modis_img = cv2.imread(path, -1)
+            # Read the first image of the sequence to get its dimensions
+            image_path = os.path.join(self.modis_image_path, input_seq[0] + ".tif")
+            modis_img = cv2.imread(image_path, -1)
             modis_img_length = np.array(modis_img).shape[0]
             modis_img_breadth = np.array(modis_img).shape[1]
+
+            # Randomly select a patch (subregion) for the sequence
             starting_point_x = random.randint(
                 0, modis_img_length - (self.patch_dim + 1)
             )
@@ -165,66 +243,46 @@ class MODISDataLoader(data.Dataset):
                 0, modis_img_breadth - (self.patch_dim + 1)
             )
 
+            # If the sequence is unique, return it. Otherwise, repeat until we generate
+            # a unique sequence
             seq_identifiers = (seq_starting_point, starting_point_x, starting_point_y)
             if seq_identifiers not in self.unique_datapoints_set:
                 self.unique_datapoints_set.add(seq_identifiers)
-                flag = 1
+                break
 
         return ((input_seq, pred_seq), seq_identifiers)
 
-    def prepare_train_test_validation_data(
-        self, new_image_list: List[str]
-    ) -> Tuple[
-        List[Tuple[List[str], List[str]]],
-        List[Tuple[List[str], List[str]]],
-        List[Tuple[List[str], List[str]]],
-    ]:
+    def _prepare_train_test_validation_data(self) -> None:
         """
-        Prepare training dataset for the sequence-to-sequence prediction problem
+        Prepare training, test, and validation datasets for the sequence-to-sequence prediction problem
+        """
+        image_list = self._sort_images_by_date()
 
-        Args:
-        -   new_image_list: the sorted list of ALL the image names in the dataset as per their date
-        Returns:
-            Tuple(training_data, test_data, validation_data)
-        -   training_dataset: List[Tuple[List[str], List[str]]]: A list of tuples of lists- Each tuple represents a single data point
-                              A tuple contains 2 lists: first list being the input sequence of image names
-                              and second list being the output sequence of image names
-        -   test_dataset: List[Tuple[List[str], List[str]]]: A list of tuples of lists- Each tuple represents a single data point
-                              A tuple contains 2 lists: first list being the input sequence of image names
-                              and second list being the output sequence of image names
-        -   validation_dataset: List[Tuple[List[str], List[str]]]: A list of tuples of lists- Each tuple represents a single data point
-                              A tuple contains 2 lists: first list being the input sequence of image names
-                              and second list being the output sequence of image names
-        """
+        # Initialize a set to store unique datapoints (sequences)
         self.unique_datapoints_set = set()
-        training_data = []
-        training_data_seq_id = []
-        for _ in range(self.number_training_seq):
-            data_seq, data_seq_id = self.prepare_data_sequence(new_image_list)
-            training_data.append(data_seq)
-            training_data_seq_id.append(data_seq_id)
 
-        test_data = []
-        test_data_seq_id = []
-        for _ in range(self.number_test_seq):
-            data_seq, data_seq_id = self.prepare_data_sequence(new_image_list)
-            test_data.append(data_seq)
-            test_data_seq_id.append(data_seq_id)
+        # Create unique sequences for the three splits (training, test, validation)
+        for data_type in ["training", "test", "validation"]:
+            no_seq = getattr(self, "number_{}_seq".format(data_type))
+            data_seqs, data_seq_id = [], []
 
-        validation_data = []
-        validation_data_seq_id = []
-        for _ in range(self.number_validation_seq):
-            data_seq, data_seq_id = self.prepare_data_sequence(new_image_list)
-            validation_data.append(data_seq)
-            validation_data_seq_id.append(data_seq_id)
+            for _ in range(no_seq):
+                seq, seq_id = self._prepare_single_sequence(image_list)
+                data_seqs.append(seq)
+                data_seq_id.append(seq_id)
 
-        self.training_data_seq_id = training_data_seq_id
-        self.test_data_seq_id = test_data_seq_id
-        self.validation_data_seq_id = validation_data_seq_id
+            # Prepare encodings necessary for the transformer model based on the timestamp of the image
+            encodings = [float(x[0] / 365) for x in data_seq_id]
 
-        return training_data, test_data, validation_data
+            # Store the `data_seqs` and `data_seq_id` as instance variables
+            # e.g. self.training_data = data_seqs
+            #      self.training_data_seq_id = data_seq_id
+            #      self.training_data_encodings = encodings
+            setattr(self, "{}_data".format(data_type), data_seqs)
+            setattr(self, "{}_data_seq_id".format(data_type), data_seq_id)
+            setattr(self, "{}_data_encodings".format(data_type), encodings)
 
-    def create_dir(self, dir_name: str):
+    def _create_dir(self, dir_name: str):
         """
         Delete (if already exists) and Create a directory with the argument as its name,
 
@@ -232,202 +290,34 @@ class MODISDataLoader(data.Dataset):
         -   dir_name: name of the directory
         """
         if os.path.exists(dir_name):
+            # If the directory exists, prune all the subfolders and files within
             shutil.rmtree(dir_name)
+        # Create the directory
         os.makedirs(dir_name)
 
-    def save_data_into_dir(
-        self, data: List[Tuple[List[str], List[str]]], data_type: str
-    ):
+    def __getitem__(self, idx: int) -> Tuple[np.array, np.array, np.array]:
         """
-        Save the data into the directory structure as described in the docstring of save_train_test_validation_data()
+        Fetches the data point (input seq of images, output seq of images, encoding of input_seq) at a given index
 
         Args:
-        -   data: training/test/validation data as output by prepare_train_test_validation_data()
-        """
-
-        data_point_name = None
-
-        for i, data_point in enumerate(data):
-            inp_seq = data_point[0]
-            pred_seq = data_point[1]
-            if data_type == "training":
-                data_point_name = self.training_data_seq_id[i]
-            elif data_type == "test":
-                data_point_name = self.test_data_seq_id[i]
-            elif data_type == "validation":
-                data_point_name = self.validation_data_seq_id[i]
-            data_point_name_str = (
-                str(data_point_name[0])
-                + "_"
-                + str(data_point_name[1])
-                + "_"
-                + str(data_point_name[2])
-            )
-            if data_type == "training":
-                self.create_dir("./training_dataset/" + str(i))
-            elif data_type == "test":
-                self.create_dir("./test_dataset/" + str(i))
-            elif data_type == "validation":
-                self.create_dir("./validation_dataset/" + str(i))
-
-            input_modis_seq = np.zeros(
-                (self.input_seq_len, self.patch_dim, self.patch_dim)
-            )
-            for j, img_str in enumerate(inp_seq):
-                path = self.modis_image_path + "/" + img_str + ".tif"
-                modis_img = cv2.imread(path, -1)
-                modis_img = modis_img[
-                    int(data_point_name[1]) : int(data_point_name[1]) + self.patch_dim,
-                    int(data_point_name[2]) : int(data_point_name[2]) + self.patch_dim,
-                ]
-                input_modis_seq[j, :, :] = modis_img
-
-            pred_modis_seq = np.zeros(
-                (self.prediction_seq_len, self.patch_dim, self.patch_dim)
-            )
-            for j, img_str in enumerate(pred_seq):
-                path = self.modis_image_path + "/" + img_str + ".tif"
-                modis_img = cv2.imread(path, -1)
-                modis_img = modis_img[
-                    int(data_point_name[1]) : int(data_point_name[1]) + self.patch_dim,
-                    int(data_point_name[2]) : int(data_point_name[2]) + self.patch_dim,
-                ]
-                pred_modis_seq[j, :, :] = modis_img
-
-            if data_type == "training":
-                np.save(
-                    os.path.join(
-                        "./training_dataset/" + str(i),
-                        "input_" + data_point_name_str + ".npy",
-                    ),
-                    input_modis_seq,
-                )
-                np.save(
-                    os.path.join(
-                        "./training_dataset/" + str(i),
-                        "pred_" + data_point_name_str + ".npy",
-                    ),
-                    pred_modis_seq,
-                )
-            elif data_type == "test":
-                np.save(
-                    os.path.join(
-                        "./test_dataset/" + str(i),
-                        "input_" + data_point_name_str + ".npy",
-                    ),
-                    input_modis_seq,
-                )
-                np.save(
-                    os.path.join(
-                        "./test_dataset/" + str(i),
-                        "pred_" + data_point_name_str + ".npy",
-                    ),
-                    pred_modis_seq,
-                )
-            elif data_type == "validation":
-                np.save(
-                    os.path.join(
-                        "./validation_dataset/" + str(i),
-                        "input_" + data_point_name_str + ".npy",
-                    ),
-                    input_modis_seq,
-                )
-                np.save(
-                    os.path.join(
-                        "./validation_dataset/" + str(i),
-                        "pred_" + data_point_name_str + ".npy",
-                    ),
-                    pred_modis_seq,
-                )
-
-    def save_train_test_validation_data(
-        self,
-        training_data: List[Tuple[List[str], List[str]]],
-        test_data: List[Tuple[List[str], List[str]]],
-        validation_data: List[Tuple[List[str], List[str]]],
-    ):
-        """
-        Save the Training, Test, and Validation data into respective directories-
-        The directory structure is as follows:
-        training_dataset -> 0,1,2,...,n (where n is number of training data sequences) -> for i: input_<image-ID> and
-        pred_<image-ID>, which represent the input and prediction image sequences.
-        """
-
-        self.create_dir("training_dataset")
-        self.create_dir("test_dataset")
-        self.create_dir("validation_dataset")
-
-        self.save_data_into_dir(training_data, "training")
-        self.save_data_into_dir(test_data, "test")
-        self.save_data_into_dir(validation_data, "validation")
-
-    def prepare_encodings(self):
-        """
-        Prepare encodings necessary for the transformer model based on the timestamp of the image
-        """
-
-        training_encodings = [float(x[0] / 365) for x in self.training_data_seq_id]
-        test_encodings = [float(x[0] / 365) for x in self.test_data_seq_id]
-        validation_encodings = [float(x[0] / 365) for x in self.validation_data_seq_id]
-
-        self.training_data_encodings = training_encodings
-        self.test_data_encodings = test_encodings
-        self.validation_data_encodings = validation_encodings
-
-    def __getitem__(self, index: int) -> Tuple[np.array, np.array]:
-        """
-        Fetches the data point (input seq of images, output seq of images) at a given index
-
-        Args:
-            index (int): Index
+            idx (int): index
         Returns:
-            tuple: (image_seq, image_seq)
+            tuple: (image_seq, image_seq, seq_encoding)
         """
-        inp_seq = None
-        pred_seq = None
-        starting_point_x = None
-        starting_point_y = None
+        try:
+            data_split = self.dataset[self.mode]
+        except:
+            raise ValueError(
+                "{} not a valid mode. Expecting `training`, `test`, or `validation`.".format(
+                    self.mode
+                )
+            )
 
-        if self.mode == "train":
-            inp_seq, pred_seq = self.training_data[index]
-        elif self.mode == "validation":
-            inp_seq, pred_seq = self.validation_data[index]
-        elif self.mode == "test":
-            inp_seq, pred_seq = self.test_data[index]
+        input = data_split["input"][idx]
+        pred = data_split["pred"][idx]
+        encoding = data_split["encodings"][idx]
 
-        if self.mode == "train":
-            starting_point_x = self.training_data_seq_id[index][1]
-            starting_point_y = self.training_data_seq_id[index][2]
-        elif self.mode == "validation":
-            starting_point_x = self.validation_data_seq_id[index][1]
-            starting_point_y = self.validation_data_seq_id[index][2]
-        elif self.mode == "test":
-            starting_point_x = self.test_data_seq_id[index][1]
-            starting_point_y = self.test_data_seq_id[index][2]
-
-        input_modis_seq = np.zeros((self.input_seq_len, self.patch_dim, self.patch_dim))
-        for i, img_str in enumerate(inp_seq):
-            path = self.modis_image_path + "/" + img_str + ".tif"
-            modis_img = cv2.imread(path, -1)
-            modis_img = modis_img[
-                starting_point_x : starting_point_x + self.patch_dim,
-                starting_point_y : starting_point_y + self.patch_dim,
-            ]
-            input_modis_seq[i, :, :] = modis_img
-
-        pred_modis_seq = np.zeros(
-            (self.prediction_seq_len, self.patch_dim, self.patch_dim)
-        )
-        for i, img_str in enumerate(pred_seq):
-            path = self.modis_image_path + "/" + img_str + ".tif"
-            modis_img = cv2.imread(path, -1)
-            modis_img = modis_img[
-                starting_point_x : starting_point_x + self.patch_dim,
-                starting_point_y : starting_point_y + self.patch_dim,
-            ]
-            pred_modis_seq[i, :, :] = modis_img
-
-        return (input_modis_seq, pred_modis_seq)
+        return input, pred, encoding
 
     def __len__(self) -> int:
         """
@@ -436,13 +326,37 @@ class MODISDataLoader(data.Dataset):
         Returns:
             int: length of the dataset
         """
-        l = None
+        try:
+            data_split = self.dataset[self.mode]
+        except:
+            raise ValueError(
+                "{} not a valid mode. Expecting `training`, `test`, or `validation`.".format(
+                    self.mode
+                )
+            )
 
-        if self.mode == "train":
-            l = len(self.training_data)
-        elif self.mode == "validation":
-            l = len(self.validation_data)
-        elif self.mode == "test":
-            l = len(self.test_data)
+        return len(data_split["input"])
 
-        return l
+    def collate(self, batch):
+        """
+        Collate function used to combine data into batch tensor
+        """
+        batch_input, batch_pred, batch_encoding = [], [], []
+        for input, pred, encoding in batch:
+            # Flatten the image
+            input = input.reshape((input.shape[0], -1))
+            pred = pred.reshape((pred.shape[0], -1))
+
+            batch_input.append(input)
+            batch_pred.append(pred)
+            batch_encoding.append(encoding)
+
+        batch_input = np.stack(batch_input)
+        batch_pred = np.stack(batch_pred)
+        batch_encoding = np.stack(batch_encoding)
+
+        batch_input = torch.from_numpy(batch_input).float()
+        batch_pred = torch.from_numpy(batch_pred).float()
+        batch_encoding = torch.from_numpy(batch_encoding).float()
+
+        return batch_input, batch_pred, batch_encoding
