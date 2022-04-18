@@ -24,3 +24,11 @@ debug
 
 # Cache
 cache
+
+# Checkpoints
+/runs
+/.ipynb_checkpoints
+/model_checkpoints
+
+# Data
+/datasets
