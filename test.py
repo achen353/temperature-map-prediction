@@ -6,10 +6,7 @@ import random
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.optim as optim
-import torch.optim.lr_scheduler as lr_scheduler
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 
 from modules.dataloader_v2 import MODISDataset
 from modules.LSTM_benchmark import LSTM
@@ -83,7 +80,9 @@ def main(config_path):
 
         if model_class == Transformer:
             if has_pos_info:
-                t_output = model(t_input, pos_info=t_encodings, token_is_zero=token_is_zero)
+                t_output = model(
+                    t_input, pos_info=t_encodings, token_is_zero=token_is_zero
+                )
             else:
                 t_output = model(t_input, pos_info=None, token_is_zero=token_is_zero)
         else:
@@ -96,10 +95,11 @@ def main(config_path):
         t_loss = criterion(t_output, t_pred)
         t_loss_val = t_loss.item()
         t_losses.append(t_loss_val)
-    
+
     test_loss = np.mean(t_losses)
 
     print("[INFO] Test Loss: {}".format(test_loss))
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

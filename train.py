@@ -31,7 +31,6 @@ def main(config_path, trial_num=0):
         np.random.seed(seed)
         torch.manual_seed(seed)
 
-
     RUN_NAME = "{}_{}".format(config["name"], trial_num)
     EPOCH = config["epoch"]
     model_class = MODELS[config["model"]["class"]]
@@ -44,7 +43,7 @@ def main(config_path, trial_num=0):
     use_diff = config["dataset"]["hyperparam"]["use_diff"]
 
     model = model_class(**config["model"]["hyperparams"])
-    
+
     if "device" in config:
         model.device = config["device"]
     device = model.device
@@ -100,7 +99,7 @@ def main(config_path, trial_num=0):
         for i, (input, pred, encodings) in enumerate(train_dataloader):
             model.train()
             n_iter += 1
-            
+
             # Make sure batch_size is in the second dim
             input, pred, encodings = (
                 input.permute(1, 0, 2),
@@ -119,7 +118,9 @@ def main(config_path, trial_num=0):
 
             if model_class == Transformer:
                 if has_pos_info:
-                    output = model(input, pos_info=encodings, token_is_zero=token_is_zero)
+                    output = model(
+                        input, pos_info=encodings, token_is_zero=token_is_zero
+                    )
                 else:
                     output = model(input, pos_info=None, token_is_zero=token_is_zero)
             else:
@@ -152,9 +153,15 @@ def main(config_path, trial_num=0):
 
                     if model_class == Transformer:
                         if has_pos_info:
-                            v_output = model(v_input, pos_info=v_encodings, token_is_zero=token_is_zero)
+                            v_output = model(
+                                v_input,
+                                pos_info=v_encodings,
+                                token_is_zero=token_is_zero,
+                            )
                         else:
-                            v_output = model(v_input, pos_info=None, token_is_zero=token_is_zero)
+                            v_output = model(
+                                v_input, pos_info=None, token_is_zero=token_is_zero
+                            )
                     else:
                         v_output = model(v_input)
 
@@ -165,7 +172,7 @@ def main(config_path, trial_num=0):
                     v_loss = criterion(v_output, v_pred)
                     v_loss_val = v_loss.item()
                     v_losses.append(v_loss_val)
-                    
+
                 valid_loss = np.mean(v_losses)
 
                 writer.add_scalar("loss/valid_iter", valid_loss, n_iter)
@@ -188,9 +195,15 @@ def main(config_path, trial_num=0):
 
                         if model_class == Transformer:
                             if has_pos_info:
-                                t_output = model(t_input, pos_info=t_encodings, token_is_zero=token_is_zero)
+                                t_output = model(
+                                    t_input,
+                                    pos_info=t_encodings,
+                                    token_is_zero=token_is_zero,
+                                )
                             else:
-                                t_output = model(t_input, pos_info=None, token_is_zero=token_is_zero)
+                                t_output = model(
+                                    t_input, pos_info=None, token_is_zero=token_is_zero
+                                )
                         else:
                             t_output = model(t_input)
 
@@ -201,7 +214,7 @@ def main(config_path, trial_num=0):
                         t_loss = criterion(t_output, t_pred)
                         t_loss_val = t_loss.item()
                         t_losses.append(t_loss_val)
-                    
+
                     test_loss = np.mean(t_losses)
 
                     writer.add_scalar("loss/test_iter", test_loss, n_iter)
@@ -215,7 +228,7 @@ def main(config_path, trial_num=0):
                             "valid_loss": valid_loss,
                             "test_loss": test_loss,
                         },
-                        "./model_checkpoints/{}/best/best.pt".format(RUN_NAME)
+                        "./model_checkpoints/{}/best/best.pt".format(RUN_NAME),
                     )
                     best_valid_loss = valid_loss
                     best_test_loss = test_loss
@@ -226,7 +239,11 @@ def main(config_path, trial_num=0):
         scheduler.step()
 
     with open("results.csv", mode="a") as f:
-        f.write("{},{},{:.4f},{:.4f}\n".format(RUN_NAME, trial_num, best_valid_loss, best_test_loss))
+        f.write(
+            "{},{},{:.4f},{:.4f}\n".format(
+                RUN_NAME, trial_num, best_valid_loss, best_test_loss
+            )
+        )
 
 
 if __name__ == "__main__":
