@@ -107,6 +107,7 @@ class MODISDataset(Dataset):
             h5file = h5py.File(self.h5_path, "w")
 
             for data_type in ["training", "test", "validation"]:
+                print("[INFO] Creating real {} sequences".format(data_type))
                 seq_ids = getattr(self, "{}_data_seq_id".format(data_type))
                 data = getattr(self, "{}_data".format(data_type))
 
@@ -197,6 +198,9 @@ class MODISDataset(Dataset):
                     input_modis_sequences.append(input_modis_seq)
                     pred_modis_sequences.append(pred_modis_seq)
                     seq_encodings.append(seq_enc)
+
+                    if (i + 1) % 100 == 0:
+                        print("{}/{} real sequences created.".format(i + 1, len(data)))
 
                 input_modis_sequences = np.stack(input_modis_sequences)
                 pred_modis_sequences = np.stack(pred_modis_sequences)
@@ -325,13 +329,17 @@ class MODISDataset(Dataset):
 
         # Create unique sequences for the three splits (training, test, validation)
         for data_type in ["training", "test", "validation"]:
+            print("[INFO] Generating {} data sequences.".format(data_type))
             no_seq = getattr(self, "number_{}_seq".format(data_type))
             data_seqs, data_seq_id = [], []
 
-            for _ in range(no_seq):
+            for i in range(no_seq):
                 seq, seq_id = self._prepare_single_sequence(image_list)
                 data_seqs.append(seq)
                 data_seq_id.append(seq_id)
+
+                if (i + 1) % 100 == 0:
+                    print("{}/{} sequences created.".format(i + 1, no_seq))
 
             # Store the `data_seqs` and `data_seq_id` as instance variables
             # e.g. self.training_data = data_seqs
