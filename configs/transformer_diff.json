@@ -1,20 +1,22 @@
 {
-    "name": "lstm",
+    "name": "transformer_diff",
     "seed": {
         "fixed": false,
         "value": 417
     },
-    "resume_from_checkpoint": "lstm_5",
-    "device": "cuda:0",
+    "resume_from_checkpoint": "transformer_diff_6",
+    "device": "cuda:7",
     "model": {
-        "class": "LSTM",
+        "class": "Transformer",
         "hyperparams": {
-            "num_layers": 3,
+            "num_enc_layers": 3,
             "input_size": 10000,
+            "input_len": 10,
             "pred_len": 4,
             "feature_size": 512,
-            "dropout": 0.1,
-            "bidirectional": false
+            "NHEAD": 4,
+            "has_pos": false,
+            "dropout": 0.1
         }
     },
     "optimizer": {
@@ -35,10 +37,10 @@
             "patch_dim": 100,
             "input_seq_len": 10,
             "prediction_seq_len": 4,
-            "number_training_seq": 50000,
-            "number_validation_seq": 5000,
-            "number_test_seq": 5000,
-            "use_diff": false,
+            "number_training_seq": 30000,
+            "number_validation_seq": 6000,
+            "number_test_seq": 6000,
+            "use_diff": true,
             "modis_img_path": "./datasets/MOD11A2"
         }
     },
